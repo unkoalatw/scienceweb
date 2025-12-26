@@ -134,7 +134,12 @@
     </footer>
 
     <script>
+        // 請確認這裡是你的最新 API 網址
         const API_URL = "https://script.google.com/macros/s/AKfycbyCmkbP9rYgjTbOVDfFWDzYz1K9yQZeXgR6Q_k71WhHaVn2ppWQh9KPfXXDY3GD4aY/exec";
+        
+        // 網站首頁網址 (用於分享連結)
+        const SITE_URL = "https://unkoalatw.github.io/scienceweb";
+
         let articles = [];
         let isSearching = false;
         let selectedTag = null;
@@ -183,8 +188,7 @@
             // 3. 移除 ?raw=true 等參數
             cleanUrl = cleanUrl.split('?')[0];
 
-            // 4. 使用 wsrv.nl 進行 CDN 加速 + 智能縮圖 (列表頁用小圖，內頁用大圖)
-            // output=webp: 強制轉為 WebP，體積更小
+            // 4. 使用 wsrv.nl 進行 CDN 加速 + 智能縮圖
             return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=80&output=webp`;
         }
 
@@ -351,17 +355,21 @@
             });
         }
 
+        // [分享功能優化] 包含標題、網址與搜尋引導
         function copyShare(title) {
-            const text = `推薦你看看這個：【${title}】`;
+            // 組合分享文案
+            const text = `嘿！推薦你閱讀這篇科普文章：【${title}】\n🔗 ${SITE_URL}\n(請點擊連結後搜尋標題)`;
+            
             const dummy = document.createElement("textarea");
             document.body.appendChild(dummy);
             dummy.value = text;
             dummy.select();
             document.execCommand("copy");
             document.body.removeChild(dummy);
+            
             const toast = document.createElement('div');
             toast.className = 'fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold flex items-center gap-3 fade-in';
-            toast.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i> 連結已複製';
+            toast.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i> 分享內容已複製';
             document.body.appendChild(toast);
             if(window.lucide) lucide.createIcons();
             setTimeout(() => toast.remove(), 2500);

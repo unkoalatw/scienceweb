@@ -24,7 +24,15 @@
             transition: width 0.1s; 
         }
 
-        #app-root { min-height: 80vh; padding-top: 1rem; }
+        #app-root { min-height: 80vh; padding-top: 1rem; transition: all 0.3s ease; }
+
+        /* [關鍵修正] 全螢幕模式樣式 */
+        #app-root.full-width-mode {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100vw !important;
+        }
 
         /* 骨架屏 */
         .skeleton-card { background: #f1f5f9; border-radius: 2rem; height: 360px; position: relative; overflow: hidden; }
@@ -69,6 +77,15 @@
         #back-to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
         #back-to-top:hover { background: #4f46e5; transform: scale(1.1); }
 
+        /* Iframe 隔離模式樣式 */
+        .isolated-frame {
+            width: 100vw;
+            height: 100vh; /* 預設全螢幕高度 */
+            border: none;
+            display: block;
+            background: #fff;
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -76,7 +93,8 @@
 <body class="bg-slate-50 text-slate-900 selection:bg-indigo-100">
     <div id="progress-bar"></div>
 
-    <nav class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200">
+    <!-- 導航欄 -->
+    <nav id="main-nav" class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200 transition-transform duration-300">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
             <div class="flex items-center space-x-3 cursor-pointer group" onclick="resetAndHome()">
                 <div class="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-md group-hover:rotate-6 transition-transform">
@@ -99,6 +117,7 @@
         </div>
     </nav>
 
+    <!-- 主內容區塊 -->
     <main id="app-root" class="max-w-6xl mx-auto p-4 md:p-10 mt-2 relative min-h-screen">
         <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3">
             <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card hidden md:block"></div>
@@ -122,7 +141,7 @@
         let searchTimer = null;
 
         (function init() {
-            const cachedData = localStorage.getItem('ds_data_v27');
+            const cachedData = localStorage.getItem('ds_data_v28');
             if (cachedData) {
                 articles = JSON.parse(cachedData);
                 renderHome();
@@ -139,7 +158,7 @@
                 const json = await res.json();
                 if (json.status === 'success') {
                     articles = json.data;
-                    localStorage.setItem('ds_data_v27', JSON.stringify(articles));
+                    localStorage.setItem('ds_data_v28', JSON.stringify(articles));
                     if (!isSearching && !selectedTag && !document.querySelector('.article-mode')) {
                         renderHome();
                         renderTagCloud();
@@ -148,12 +167,10 @@
             } catch (e) { console.warn("API 離線中"); }
         }
 
-        // [圖片優化核心] 自動轉換 GitHub Raw 連結為 jsDelivr CDN 連結
+        // 圖片加速優化
         function optimizeImageUrl(url) {
             if (!url) return '';
-            // 如果是 GitHub Raw 連結
             if (url.includes('raw.githubusercontent.com')) {
-                // 轉換格式: https://raw.githubusercontent.com/user/repo/branch/file -> https://cdn.jsdelivr.net/gh/user/repo@branch/file
                 return url.replace('raw.githubusercontent.com', 'cdn.jsdelivr.net/gh')
                           .replace('/main/', '@main/')
                           .replace('/master/', '@master/'); 
@@ -201,21 +218,25 @@
         function resetAndHome() {
             document.title = "Daily Science | 科普小站";
             document.getElementById('search-input').value = '';
+            
+            // 恢復 UI 狀態
+            const root = document.getElementById('app-root');
+            root.classList.remove('full-width-mode', 'article-mode');
+            document.getElementById('main-nav').style.transform = 'translateY(0)';
+            document.getElementById('main-footer').style.display = 'block';
+            
             isSearching = false;
             selectedTag = null;
             renderHome();
             renderTagCloud();
-            document.getElementById('main-footer').style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function renderHome(data = articles) {
             const root = document.getElementById('app-root');
-            root.classList.remove('article-mode');
             let html = (isSearching || selectedTag) ? `<div class="mb-8 text-slate-400 font-bold fade-in flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> 找到 ${data.length} 篇相關文章</div>` : '';
             html += `<div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3 fade-in">`;
             data.forEach(art => {
-                // 使用優化後的圖片連結，並加入 lazy loading 與 async decoding
                 const optimizedImg = optimizeImageUrl(art.image);
                 const img = optimizedImg ? `<img src="${optimizedImg}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000" loading="lazy" decoding="async">` : `<div class="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300 font-black text-xs tracking-widest text-center px-4 uppercase">Scientific Insight</div>`;
                 html += `
@@ -244,31 +265,40 @@
             
             window.scrollTo({ top: 0, behavior: 'instant' });
 
-            const isFullHtml = art.content.toLowerCase().includes('<html') || art.content.toLowerCase().includes('<!doctype');
+            // [關鍵判斷] 檢查是否為完整 HTML 作品 (含 <!DOCTYPE 或 <html 標籤)
+            const isFullHtml = /<!doctype|<html/i.test(art.content);
 
             if (isFullHtml) {
+                // === 全螢幕劇院模式 ===
+                // 1. 啟用全寬樣式，移除邊距限制
+                root.classList.add('full-width-mode');
+                // 2. 隱藏導航欄 (可選，讓視覺更乾淨)
+                document.getElementById('main-nav').style.transform = 'translateY(-100%)';
+
                 root.innerHTML = `
-                    <div class="fixed top-4 right-4 z-[2000] flex gap-2">
-                         <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/90 backdrop-blur text-slate-400 hover:text-indigo-600 shadow-lg transition-all" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
-                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-lg hover:scale-110 transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    <div class="fixed top-4 right-4 z-[9999] flex gap-2 group">
+                         <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/10 backdrop-blur text-slate-800 hover:bg-white hover:text-indigo-600 shadow-lg transition-all border border-white/20" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
+                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-lg hover:scale-110 transition-all border border-white/20"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
-                    <iframe id="content-frame" class="isolated-frame fade-in" style="height: 85vh; border-radius: 1.5rem; box-shadow: 0 20px 40px rgba(0,0,0,0.1);"></iframe>
+                    <iframe id="content-frame" class="isolated-frame fade-in"></iframe>
                 `;
+                
                 const frame = document.getElementById('content-frame');
                 const doc = frame.contentWindow.document;
                 doc.open();
                 doc.write(art.content);
                 doc.close();
                 
-                frame.onload = function() {
-                    const height = frame.contentWindow.document.body.scrollHeight;
-                     if(height > 0) frame.style.height = (height + 50) + 'px';
-                };
+                // 強制設定 Iframe 高度，確保圖表有空間顯示
+                frame.style.height = "100vh"; 
 
             } else {
+                // === 普通文章模式 ===
+                root.classList.remove('full-width-mode');
+                document.getElementById('main-nav').style.transform = 'translateY(0)'; // 顯示導航
+
                 const textContent = String(art.content).replace(/<[^>]*>/g, '');
                 const readTime = Math.max(1, Math.round(textContent.length / 400));
-                // 文章內頁圖片同樣優化
                 const optimizedImg = optimizeImageUrl(art.image);
                 
                 root.innerHTML = `
@@ -292,6 +322,8 @@
                     </article>
                     <div class="mt-24 pt-12 border-t border-slate-100 text-center text-slate-300 font-black tracking-widest text-xs uppercase">End of Content</div>
                 </div>`;
+                
+                // 只有普通文章需要手動觸發腳本
                 setTimeout(() => { executeScripts(root); }, 300); 
             }
             

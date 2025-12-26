@@ -26,7 +26,7 @@
 
         #app-root { min-height: 80vh; padding-top: 1rem; transition: all 0.3s ease; }
 
-        /* [關鍵修正] 全螢幕模式樣式 */
+        /* 全螢幕模式樣式 */
         #app-root.full-width-mode {
             max-width: 100% !important;
             padding: 0 !important;
@@ -80,7 +80,7 @@
         /* Iframe 隔離模式樣式 */
         .isolated-frame {
             width: 100vw;
-            height: 100vh; /* 預設全螢幕高度 */
+            height: 100vh;
             border: none;
             display: block;
             background: #fff;
@@ -141,7 +141,7 @@
         let searchTimer = null;
 
         (function init() {
-            const cachedData = localStorage.getItem('ds_data_v28');
+            const cachedData = localStorage.getItem('ds_data_v29');
             if (cachedData) {
                 articles = JSON.parse(cachedData);
                 renderHome();
@@ -158,7 +158,7 @@
                 const json = await res.json();
                 if (json.status === 'success') {
                     articles = json.data;
-                    localStorage.setItem('ds_data_v28', JSON.stringify(articles));
+                    localStorage.setItem('ds_data_v29', JSON.stringify(articles));
                     if (!isSearching && !selectedTag && !document.querySelector('.article-mode')) {
                         renderHome();
                         renderTagCloud();
@@ -167,15 +167,25 @@
             } catch (e) { console.warn("API 離線中"); }
         }
 
-        // 圖片加速優化
-        function optimizeImageUrl(url) {
+        // [極速核心] 圖片加速與 GitHub Raw 轉換
+        function optimizeImageUrl(url, width = 800) {
             if (!url) return '';
-            if (url.includes('raw.githubusercontent.com')) {
-                return url.replace('raw.githubusercontent.com', 'cdn.jsdelivr.net/gh')
-                          .replace('/main/', '@main/')
-                          .replace('/master/', '@master/'); 
+            
+            // 1. 清理 URL
+            let cleanUrl = url.trim();
+            
+            // 2. 處理 GitHub 一般網址 (github.com/.../blob/...) -> 轉為 raw 格式
+            if (cleanUrl.includes('github.com') && cleanUrl.includes('/blob/')) {
+                cleanUrl = cleanUrl.replace('github.com', 'raw.githubusercontent.com')
+                                   .replace('/blob/', '/');
             }
-            return url;
+            
+            // 3. 移除 ?raw=true 等參數
+            cleanUrl = cleanUrl.split('?')[0];
+
+            // 4. 使用 wsrv.nl 進行 CDN 加速 + 智能縮圖 (列表頁用小圖，內頁用大圖)
+            // output=webp: 強制轉為 WebP，體積更小
+            return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=80&output=webp`;
         }
 
         function renderTagCloud() {
@@ -219,7 +229,6 @@
             document.title = "Daily Science | 科普小站";
             document.getElementById('search-input').value = '';
             
-            // 恢復 UI 狀態
             const root = document.getElementById('app-root');
             root.classList.remove('full-width-mode', 'article-mode');
             document.getElementById('main-nav').style.transform = 'translateY(0)';
@@ -234,10 +243,12 @@
 
         function renderHome(data = articles) {
             const root = document.getElementById('app-root');
+            root.classList.remove('article-mode');
             let html = (isSearching || selectedTag) ? `<div class="mb-8 text-slate-400 font-bold fade-in flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> 找到 ${data.length} 篇相關文章</div>` : '';
             html += `<div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3 fade-in">`;
             data.forEach(art => {
-                const optimizedImg = optimizeImageUrl(art.image);
+                // 列表頁使用 600px 寬度的縮圖，大幅提升載入速度
+                const optimizedImg = optimizeImageUrl(art.image, 600);
                 const img = optimizedImg ? `<img src="${optimizedImg}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000" loading="lazy" decoding="async">` : `<div class="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300 font-black text-xs tracking-widest text-center px-4 uppercase">Scientific Insight</div>`;
                 html += `
                 <div onclick="renderArticle('${art.id}')" class="article-card bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden cursor-pointer group text-left">
@@ -265,14 +276,10 @@
             
             window.scrollTo({ top: 0, behavior: 'instant' });
 
-            // [關鍵判斷] 檢查是否為完整 HTML 作品 (含 <!DOCTYPE 或 <html 標籤)
-            const isFullHtml = /<!doctype|<html/i.test(art.content);
+            const isFullHtml = art.content.toLowerCase().includes('<html') || art.content.toLowerCase().includes('<!doctype');
 
             if (isFullHtml) {
-                // === 全螢幕劇院模式 ===
-                // 1. 啟用全寬樣式，移除邊距限制
                 root.classList.add('full-width-mode');
-                // 2. 隱藏導航欄 (可選，讓視覺更乾淨)
                 document.getElementById('main-nav').style.transform = 'translateY(-100%)';
 
                 root.innerHTML = `
@@ -289,17 +296,19 @@
                 doc.write(art.content);
                 doc.close();
                 
-                // 強制設定 Iframe 高度，確保圖表有空間顯示
-                frame.style.height = "100vh"; 
+                frame.onload = function() {
+                    const height = frame.contentWindow.document.body.scrollHeight;
+                     if(height > 0) frame.style.height = Math.max(height, window.innerHeight) + 'px';
+                };
 
             } else {
-                // === 普通文章模式 ===
                 root.classList.remove('full-width-mode');
-                document.getElementById('main-nav').style.transform = 'translateY(0)'; // 顯示導航
+                document.getElementById('main-nav').style.transform = 'translateY(0)';
 
                 const textContent = String(art.content).replace(/<[^>]*>/g, '');
                 const readTime = Math.max(1, Math.round(textContent.length / 400));
-                const optimizedImg = optimizeImageUrl(art.image);
+                // 內頁使用 1200px 較高解析度圖片
+                const optimizedImg = optimizeImageUrl(art.image, 1200);
                 
                 root.innerHTML = `
                 <div class="max-w-4xl mx-auto bg-white p-6 md:p-16 lg:p-24 rounded-[4rem] shadow-2xl border border-slate-100 fade-in relative mb-20 text-left">
@@ -323,7 +332,6 @@
                     <div class="mt-24 pt-12 border-t border-slate-100 text-center text-slate-300 font-black tracking-widest text-xs uppercase">End of Content</div>
                 </div>`;
                 
-                // 只有普通文章需要手動觸發腳本
                 setTimeout(() => { executeScripts(root); }, 300); 
             }
             

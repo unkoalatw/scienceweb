@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Science | 科普小站</title>
+    
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+    <style>
+        :root { --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+
+        /* 閱讀進度條 */
+        #progress-bar { 
+            height: 4px; 
+            background: linear-gradient(to right, #6366f1, #3b82f6); 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            z-index: 2000; 
+            width: 0%;
+            transition: width 0.1s; 
+        }
+
+        #app-root { min-height: 80vh; padding-top: 1rem; }
+
+        /* 骨架屏 */
+        .skeleton-card { background: #f1f5f9; border-radius: 2rem; height: 360px; position: relative; overflow: hidden; }
+        .skeleton-card::after {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: slide 1.5s infinite;
+        }
+        @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+        /* 文章卡片 */
+        .article-card { transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .article-card:hover { transform: translateY(-8px); box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.12); }
+        
+        .fade-in { animation: fadeIn 0.6s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 內容樣式修復 */
+        .article-content canvas { 
+            display: block !important; width: 100% !important; height: auto !important; 
+            min-height: 300px; margin: 2.5rem 0 !important; background: #fff;
+            border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .article-content img { border-radius: 2.5rem !important; margin: 3rem auto !important; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1) !important; }
+
+        .prose { max-width: none !important; color: #334155 !important; }
+        .prose h1 { font-weight: 900 !important; font-size: 2.8rem !important; line-height: 1.1 !important; color: #0f172a !important; margin-bottom: 0.5em !important; }
+        
+        /* 標籤雲 */
+        .tag-pill { transition: all 0.3s ease; white-space: nowrap; cursor: pointer; }
+        .tag-pill.active { background: #6366f1; color: white; border-color: #6366f1; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+
+        /* 回頂部按鈕固定顯示 */
+        #back-to-top { 
+            position: fixed; bottom: 2.5rem; right: 2.5rem; z-index: 1500;
+            padding: 1.2rem; background: #6366f1; color: white; border-radius: 9999px;
+            box-shadow: 0 15px 30px -5px rgba(99, 102, 241, 0.5);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0; transform: translateY(100px);
+        }
+        #back-to-top.show { opacity: 1; transform: translateY(0); }
+        #back-to-top:hover { background: #4f46e5; transform: scale(1.1); }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 selection:bg-indigo-100">
+    <div id="progress-bar"></div>
+
+    <nav class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3 cursor-pointer group" onclick="resetAndHome()">
+                <div class="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-md group-hover:rotate-6 transition-transform">
+                    <i data-lucide="microscope" class="w-6 h-6 text-white"></i>
+                </div>
+                <div class="flex flex-col text-left">
+                    <span class="font-black text-xl tracking-tight leading-none text-slate-900">Daily Science</span>
+                    <span class="text-[9px] uppercase tracking-[0.3em] text-indigo-500 font-bold mt-1">Explore Truth</span>
+                </div>
+            </div>
+            
+            <div class="relative w-full md:max-w-xs">
+                <input type="text" id="search-input" oninput="debouncedSearch(this.value)" placeholder="搜尋標題、內容或標籤..." 
+                       class="w-full bg-slate-100 border-none rounded-xl py-2.5 px-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500/50">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
+            </div>
+        </div>
+        <div id="tag-bar" class="max-w-6xl mx-auto px-4 py-2 border-t border-slate-50 flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <!-- 標籤雲 JS 生成 -->
+        </div>
+    </nav>
+
+    <main id="app-root" class="max-w-6xl mx-auto p-4 md:p-10">
+        <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3">
+            <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card hidden md:block"></div>
+        </div>
+    </main>
+
+    <button id="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="回到頂部">
+        <i data-lucide="chevron-up" class="w-7 h-7"></i>
+    </button>
+
+    <footer class="py-24 text-center text-slate-400 text-xs border-t border-slate-200 mt-20 bg-white">
+        <p class="font-bold text-slate-500 tracking-[0.3em] uppercase mb-2 italic">Curiosity is the engine of science</p>
+        <p>&copy; 2025 Daily Science. All rights reserved.</p>
+    </footer>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbyCmkbP9rYgjTbOVDfFWDzYz1K9yQZeXgR6Q_k71WhHaVn2ppWQh9KPfXXDY3GD4aY/exec";
+        let articles = [];
+        let isSearching = false;
+        let selectedTag = null;
+        let searchTimer = null;
+
+        (function init() {
+            const cachedData = localStorage.getItem('ds_data_v23');
+            if (cachedData) {
+                articles = JSON.parse(cachedData);
+                renderHome();
+                renderTagCloud();
+            }
+            fetchLatest();
+            setupScrollEvents();
+            lucide.createIcons();
+        })();
+
+        async function fetchLatest() {
+            try {
+                const res = await fetch(API_URL);
+                const json = await res.json();
+                if (json.status === 'success') {
+                    articles = json.data;
+                    localStorage.setItem('ds_data_v23', JSON.stringify(articles));
+                    if (!isSearching && !selectedTag && !document.querySelector('article')) {
+                        renderHome();
+                        renderTagCloud();
+                    }
+                }
+            } catch (e) { console.warn("API 離線中"); }
+        }
+
+        function renderTagCloud() {
+            const tagBar = document.getElementById('tag-bar');
+            const allTags = new Set();
+            articles.forEach(a => {
+                if (a.tags) String(a.tags).split(/[,，\s]+/).forEach(t => t.trim() && allTags.add(t.trim()));
+            });
+            let html = `<button onclick="filterByTag(null)" class="tag-pill px-4 py-1.5 rounded-xl text-[11px] font-bold border border-slate-200 ${!selectedTag ? 'active' : 'bg-slate-50 text-slate-500'}">全部</button>`;
+            allTags.forEach(tag => {
+                html += `<button onclick="filterByTag('${tag}')" class="tag-pill px-4 py-1.5 rounded-xl text-[11px] font-bold border border-slate-200 ${selectedTag === tag ? 'active' : 'bg-slate-50 text-slate-500'}"># ${tag}</button>`;
+            });
+            tagBar.innerHTML = html;
+        }
+
+        function filterByTag(tag) {
+            selectedTag = tag;
+            renderTagCloud();
+            const filtered = tag ? articles.filter(a => String(a.tags).includes(tag)) : articles;
+            renderHome(filtered);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function debouncedSearch(val) {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => handleSearch(val), 250);
+        }
+
+        function handleSearch(val) {
+            const q = String(val || "").trim().toLowerCase();
+            isSearching = !!q;
+            selectedTag = null; 
+            renderTagCloud();
+            if (!isSearching) { renderHome(); return; }
+            const filtered = articles.filter(a => (String(a.title)+String(a.summary)+String(a.content)+String(a.tags)).toLowerCase().includes(q));
+            renderHome(filtered);
+        }
+
+        function resetAndHome() {
+            document.title = "Daily Science | 科普小站";
+            document.getElementById('search-input').value = '';
+            isSearching = false;
+            selectedTag = null;
+            renderHome();
+            renderTagCloud();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderHome(data = articles) {
+            const root = document.getElementById('app-root');
+            let html = (isSearching || selectedTag) ? `<div class="mb-8 text-slate-400 font-bold fade-in flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> 找到 ${data.length} 篇相關文章</div>` : '';
+            html += `<div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3">`;
+            data.forEach(art => {
+                const img = art.image ? `<img src="${art.image}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000">` : `<div class="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300 font-black text-xs uppercase tracking-widest text-center px-4">Science</div>`;
+                html += `
+                <div onclick="renderArticle('${art.id}')" class="article-card bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden cursor-pointer group fade-in">
+                    <div class="relative aspect-video overflow-hidden bg-slate-50">${img}</div>
+                    <div class="p-8 text-left">
+                        <div class="text-[10px] text-indigo-600 font-black mb-3 tracking-widest uppercase opacity-70">${art.date || ''}</div>
+                        <h2 class="text-xl font-black text-slate-800 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">${art.title || '無標題'}</h2>
+                        <p class="text-slate-500 text-sm mt-4 line-clamp-2">${art.summary || '點擊閱讀全文...'}</p>
+                    </div>
+                </div>`;
+            });
+            html += `</div>`;
+            root.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        async function renderArticle(id) {
+            const art = articles.find(a => String(a.id) === String(id));
+            if (!art) return;
+            
+            document.title = `${art.title} | Daily Science`;
+            window.__ds_current_article_id = art.id;
+            const root = document.getElementById('app-root');
+            
+            // 閱讀時間計算
+            const textContent = String(art.content).replace(/<[^>]*>/g, '');
+            const readTime = Math.max(1, Math.round(textContent.length / 400));
+
+            if (String(art.content).includes('blush-meter-bg')) {
+                root.innerHTML = `
+                    <button onclick="resetAndHome()" class="fixed bottom-10 right-10 z-[2000] bg-slate-900 text-white p-5 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all"><i data-lucide="home" class="w-6 h-6"></i></button>
+                    <div class="fade-in bg-white min-h-screen">${art.content}</div>`;
+            } else {
+                root.innerHTML = `
+                <div class="max-w-4xl mx-auto bg-white p-6 md:p-16 lg:p-24 rounded-[4rem] shadow-2xl border border-slate-100 fade-in relative">
+                    <div class="flex justify-between items-center mb-12">
+                        <button onclick="resetAndHome()" class="text-slate-400 hover:text-indigo-600 flex items-center font-bold transition group">
+                            <i data-lucide="arrow-left" class="w-5 h-5 mr-2 group-hover:-translate-x-2 transition-transform"></i> 返回首頁
+                        </button>
+                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="分享文章">
+                            <i data-lucide="share-2" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    
+                    <article class="prose prose-slate prose-lg lg:prose-xl">
+                        <div class="flex flex-wrap items-center gap-4 mb-8 text-[11px] font-black uppercase tracking-widest text-indigo-500">
+                            <span class="bg-indigo-50 px-2 py-1 rounded-md">${art.date}</span>
+                            <span class="flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4"></i> 約需 ${readTime} 分鐘閱讀</span>
+                        </div>
+                        <h1 class="text-slate-900 leading-tight">${art.title}</h1>
+                        ${art.image ? `<img src="${art.image}" class="w-full shadow-2xl mb-12">` : ''}
+                        <div class="article-content text-slate-700 font-medium">${art.content}</div>
+                    </article>
+                    <div class="mt-20 pt-10 border-t border-slate-100 text-center text-slate-300 font-black tracking-widest text-xs uppercase">End of Scientific Report</div>
+                </div>`;
+            }
+            
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            setTimeout(() => {
+                lucide.createIcons(); // 關鍵：確保動態按鈕的圖示出現
+                executeScripts(root);
+            }, 600); 
+        }
+
+        function setupScrollEvents() {
+            window.addEventListener('scroll', () => {
+                const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+                const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+                const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
+                document.getElementById("progress-bar").style.width = scrolled + "%";
+
+                const btt = document.getElementById('back-to-top');
+                if (winScroll > 400) btt.classList.add('show');
+                else btt.classList.remove('show');
+            });
+        }
+
+        function copyShare(title) {
+            const text = `嘿！推薦你這篇有趣的科普文章：【${title}】`;
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-4 rounded-2xl shadow-2xl z-[3000] text-sm font-bold flex items-center gap-3 fade-in';
+            toast.innerHTML = '<i data-lucide="check" class="w-5 h-5 text-green-400"></i> 分享內容已複製到剪貼簿';
+            document.body.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function executeScripts(container) {
+            const scripts = Array.from(container.querySelectorAll('script'));
+            scripts.forEach(oldScript => {
+                const newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                const prefix = "(function() {\n var targetId = " + JSON.stringify(window.__ds_current_article_id) + "; var originalOnload = window.onload;\n var runSafeInit = function() {\n try {\n if (window.Chart) { document.querySelectorAll('canvas').forEach(function(c) { var chart = Chart.getChart(c); if (chart) chart.destroy(); }); }\n if (window.onload && window.onload !== originalOnload) { window.onload(); } else if (typeof app !== 'undefined' && app.init) { app.init(); }\n } catch(err) { console.warn('Script Error:', err); }\n };\n try {\n";
+                const suffix = "\n runSafeInit(); } catch(e) { console.error('Syntax Error:', e); } })();";
+                newScript.textContent = prefix + oldScript.innerHTML + suffix;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
+        }
+    </script>
+</body>
+</html>

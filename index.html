@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Science | 科普小站</title>
     
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <!-- 設定 Tailwind 配置以減少警告 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: {} },
+            corePlugins: { preflight: true }
+        }
+    </script>
+    
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
@@ -17,14 +25,11 @@
         #progress-bar { 
             height: 4px; 
             background: linear-gradient(to right, #6366f1, #3b82f6); 
-            position: fixed; 
-            top: 0; left: 0; 
-            z-index: 9999; 
-            width: 0%;
-            transition: width 0.1s; 
+            position: fixed; top: 0; left: 0; z-index: 9999; 
+            width: 0%; transition: width 0.1s; 
         }
 
-        #app-root { min-height: 80vh; padding-top: 1rem; transition: all 0.3s ease; }
+        #app-root { min-height: 80vh; padding-top: 1rem; transition: opacity 0.3s ease; }
 
         /* 全螢幕模式樣式 */
         #app-root.full-width-mode {
@@ -134,10 +139,7 @@
     </footer>
 
     <script>
-        // 請確認這裡是你的最新 API 網址
         const API_URL = "https://script.google.com/macros/s/AKfycbyCmkbP9rYgjTbOVDfFWDzYz1K9yQZeXgR6Q_k71WhHaVn2ppWQh9KPfXXDY3GD4aY/exec";
-        
-        // 網站首頁網址 (用於分享連結)
         const SITE_URL = "https://unkoalatw.github.io/scienceweb";
 
         let articles = [];
@@ -146,7 +148,7 @@
         let searchTimer = null;
 
         (function init() {
-            const cachedData = localStorage.getItem('ds_data_v29');
+            const cachedData = localStorage.getItem('ds_data_v30');
             if (cachedData) {
                 articles = JSON.parse(cachedData);
                 renderHome();
@@ -163,7 +165,7 @@
                 const json = await res.json();
                 if (json.status === 'success') {
                     articles = json.data;
-                    localStorage.setItem('ds_data_v29', JSON.stringify(articles));
+                    localStorage.setItem('ds_data_v30', JSON.stringify(articles));
                     if (!isSearching && !selectedTag && !document.querySelector('.article-mode')) {
                         renderHome();
                         renderTagCloud();
@@ -175,20 +177,12 @@
         // [極速核心] 圖片加速與 GitHub Raw 轉換
         function optimizeImageUrl(url, width = 800) {
             if (!url) return '';
-            
-            // 1. 清理 URL
             let cleanUrl = url.trim();
-            
-            // 2. 處理 GitHub 一般網址 (github.com/.../blob/...) -> 轉為 raw 格式
             if (cleanUrl.includes('github.com') && cleanUrl.includes('/blob/')) {
                 cleanUrl = cleanUrl.replace('github.com', 'raw.githubusercontent.com')
                                    .replace('/blob/', '/');
             }
-            
-            // 3. 移除 ?raw=true 等參數
             cleanUrl = cleanUrl.split('?')[0];
-
-            // 4. 使用 wsrv.nl 進行 CDN 加速 + 智能縮圖
             return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=80&output=webp`;
         }
 
@@ -235,8 +229,10 @@
             
             const root = document.getElementById('app-root');
             root.classList.remove('full-width-mode', 'article-mode');
-            document.getElementById('main-nav').style.transform = 'translateY(0)';
-            document.getElementById('main-footer').style.display = 'block';
+            const nav = document.getElementById('main-nav');
+            if(nav) nav.style.transform = 'translateY(0)';
+            const footer = document.getElementById('main-footer');
+            if(footer) footer.style.display = 'block';
             
             isSearching = false;
             selectedTag = null;
@@ -251,7 +247,6 @@
             let html = (isSearching || selectedTag) ? `<div class="mb-8 text-slate-400 font-bold fade-in flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> 找到 ${data.length} 篇相關文章</div>` : '';
             html += `<div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3 fade-in">`;
             data.forEach(art => {
-                // 列表頁使用 600px 寬度的縮圖，大幅提升載入速度
                 const optimizedImg = optimizeImageUrl(art.image, 600);
                 const img = optimizedImg ? `<img src="${optimizedImg}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000" loading="lazy" decoding="async">` : `<div class="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300 font-black text-xs tracking-widest text-center px-4 uppercase">Scientific Insight</div>`;
                 html += `
@@ -276,7 +271,8 @@
             document.title = `${art.title} | Daily Science`;
             const root = document.getElementById('app-root');
             root.classList.add('article-mode');
-            document.getElementById('main-footer').style.display = 'none';
+            const footer = document.getElementById('main-footer');
+            if(footer) footer.style.display = 'none';
             
             window.scrollTo({ top: 0, behavior: 'instant' });
 
@@ -284,14 +280,15 @@
 
             if (isFullHtml) {
                 root.classList.add('full-width-mode');
-                document.getElementById('main-nav').style.transform = 'translateY(-100%)';
+                const nav = document.getElementById('main-nav');
+                if(nav) nav.style.transform = 'translateY(-100%)';
 
                 root.innerHTML = `
                     <div class="fixed top-4 right-4 z-[9999] flex gap-2 group">
                          <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/10 backdrop-blur text-slate-800 hover:bg-white hover:text-indigo-600 shadow-lg transition-all border border-white/20" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
                         <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-lg hover:scale-110 transition-all border border-white/20"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
-                    <iframe id="content-frame" class="isolated-frame fade-in"></iframe>
+                    <iframe id="content-frame" class="isolated-frame fade-in" src="about:blank"></iframe>
                 `;
                 
                 const frame = document.getElementById('content-frame');
@@ -301,17 +298,20 @@
                 doc.close();
                 
                 frame.onload = function() {
-                    const height = frame.contentWindow.document.body.scrollHeight;
-                     if(height > 0) frame.style.height = Math.max(height, window.innerHeight) + 'px';
+                    // 嘗試自動調整高度，如果被擴充功能阻擋則忽略
+                    try {
+                        const height = frame.contentWindow.document.body.scrollHeight;
+                        if(height > 0) frame.style.height = Math.max(height, window.innerHeight) + 'px';
+                    } catch(e) {}
                 };
 
             } else {
                 root.classList.remove('full-width-mode');
-                document.getElementById('main-nav').style.transform = 'translateY(0)';
+                const nav = document.getElementById('main-nav');
+                if(nav) nav.style.transform = 'translateY(0)';
 
                 const textContent = String(art.content).replace(/<[^>]*>/g, '');
                 const readTime = Math.max(1, Math.round(textContent.length / 400));
-                // 內頁使用 1200px 較高解析度圖片
                 const optimizedImg = optimizeImageUrl(art.image, 1200);
                 
                 root.innerHTML = `
@@ -347,29 +347,28 @@
                 const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
                 const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
                 const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
-                document.getElementById("progress-bar").style.width = scrolled + "%";
+                const progressBar = document.getElementById("progress-bar");
+                if(progressBar) progressBar.style.width = scrolled + "%";
 
                 const btt = document.getElementById('back-to-top');
-                if (winScroll > 300) btt.classList.add('show');
-                else btt.classList.remove('show');
+                if(btt) {
+                    if (winScroll > 300) btt.classList.add('show');
+                    else btt.classList.remove('show');
+                }
             });
         }
 
-        // [分享功能優化] 包含標題、網址與搜尋引導
         function copyShare(title) {
-            // 組合分享文案
-            const text = `嘿！推薦你閱讀這篇科普文章：【${title}】\n🔗 ${SITE_URL}\n(請點擊連結後搜尋標題)`;
-            
+            const text = `推薦你閱讀這篇科普文章：【${title}】\n🔗 ${SITE_URL}\n(請點擊連結後搜尋標題)`;
             const dummy = document.createElement("textarea");
             document.body.appendChild(dummy);
             dummy.value = text;
             dummy.select();
             document.execCommand("copy");
             document.body.removeChild(dummy);
-            
             const toast = document.createElement('div');
             toast.className = 'fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold flex items-center gap-3 fade-in';
-            toast.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i> 分享內容已複製';
+            toast.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i> 連結已複製';
             document.body.appendChild(toast);
             if(window.lucide) lucide.createIcons();
             setTimeout(() => toast.remove(), 2500);

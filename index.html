@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Science | 科普小站</title>
     
-    <!-- 設定 Tailwind 配置以減少警告 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -31,15 +30,16 @@
 
         #app-root { min-height: 80vh; padding-top: 1rem; transition: opacity 0.3s ease; }
 
-        /* 全螢幕模式樣式 */
+        /* [關鍵] 全螢幕模式：強迫佔滿視窗並不產生額外間距 */
         #app-root.full-width-mode {
             max-width: 100% !important;
             padding: 0 !important;
             margin: 0 !important;
             width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden;
         }
 
-        /* 骨架屏 */
         .skeleton-card { background: #f1f5f9; border-radius: 2rem; height: 360px; position: relative; overflow: hidden; }
         .skeleton-card::after {
             content: ""; position: absolute; inset: 0;
@@ -54,25 +54,16 @@
         .fade-in { animation: fadeIn 0.6s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 內容樣式 */
-        .article-content canvas { 
-            display: block !important; width: 100% !important; height: auto !important; 
-            min-height: 300px; margin: 2.5rem 0 !important; background: #fff;
-            border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.04);
-            border: 1px solid rgba(0,0,0,0.05);
-        }
         .article-content img { border-radius: 2.5rem !important; margin: 3rem auto !important; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1) !important; }
-
         .prose { max-width: none !important; color: #334155 !important; }
         .prose h1 { font-weight: 900 !important; font-size: 2.75rem !important; line-height: 1.15 !important; color: #0f172a !important; margin-bottom: 0.5em !important; }
         
         .tag-pill { transition: all 0.3s ease; white-space: nowrap; cursor: pointer; }
         .tag-pill.active { background: #6366f1; color: white; border-color: #6366f1; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
 
-        /* 回頂部按鈕 */
         #back-to-top { 
             position: fixed; bottom: 2rem; right: 2rem; 
-            z-index: 5000; padding: 1.2rem; 
+            z-index: 5000; padding: 1rem; 
             background: #6366f1; color: white; 
             border-radius: 9999px;
             box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
@@ -80,9 +71,8 @@
             opacity: 0; pointer-events: none; transform: translateY(50px);
         }
         #back-to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
-        #back-to-top:hover { background: #4f46e5; transform: scale(1.1); }
 
-        /* Iframe 隔離模式樣式 */
+        /* [關鍵] Iframe 隔離模式：高度固定為視窗高度，內部捲動 */
         .isolated-frame {
             width: 100vw;
             height: 100vh;
@@ -98,7 +88,6 @@
 <body class="bg-slate-50 text-slate-900 selection:bg-indigo-100">
     <div id="progress-bar"></div>
 
-    <!-- 導航欄 -->
     <nav id="main-nav" class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200 transition-transform duration-300">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
             <div class="flex items-center space-x-3 cursor-pointer group" onclick="resetAndHome()">
@@ -113,16 +102,13 @@
             
             <div class="relative w-full md:max-w-xs">
                 <input type="text" id="search-input" oninput="debouncedSearch(this.value)" placeholder="搜尋標題、內容或標籤..." 
-                       class="w-full bg-slate-100 border-none rounded-xl py-2.5 px-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500/50">
+                       class="w-full bg-slate-100 border-none rounded-xl py-2 px-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500/50">
                 <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
             </div>
         </div>
-        <div id="tag-bar" class="max-w-6xl mx-auto px-4 py-2 border-t border-slate-50 flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <!-- JS 生成 -->
-        </div>
+        <div id="tag-bar" class="max-w-6xl mx-auto px-4 py-2 border-t border-slate-50 flex items-center gap-2 overflow-x-auto no-scrollbar"></div>
     </nav>
 
-    <!-- 主內容區塊 -->
     <main id="app-root" class="max-w-6xl mx-auto p-4 md:p-10 mt-2 relative min-h-screen">
         <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-3">
             <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card hidden md:block"></div>
@@ -148,7 +134,7 @@
         let searchTimer = null;
 
         (function init() {
-            const cachedData = localStorage.getItem('ds_data_v30');
+            const cachedData = localStorage.getItem('ds_data_v31');
             if (cachedData) {
                 articles = JSON.parse(cachedData);
                 renderHome();
@@ -165,7 +151,7 @@
                 const json = await res.json();
                 if (json.status === 'success') {
                     articles = json.data;
-                    localStorage.setItem('ds_data_v30', JSON.stringify(articles));
+                    localStorage.setItem('ds_data_v31', JSON.stringify(articles));
                     if (!isSearching && !selectedTag && !document.querySelector('.article-mode')) {
                         renderHome();
                         renderTagCloud();
@@ -174,13 +160,11 @@
             } catch (e) { console.warn("API 離線中"); }
         }
 
-        // [極速核心] 圖片加速與 GitHub Raw 轉換
         function optimizeImageUrl(url, width = 800) {
             if (!url) return '';
             let cleanUrl = url.trim();
             if (cleanUrl.includes('github.com') && cleanUrl.includes('/blob/')) {
-                cleanUrl = cleanUrl.replace('github.com', 'raw.githubusercontent.com')
-                                   .replace('/blob/', '/');
+                cleanUrl = cleanUrl.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
             }
             cleanUrl = cleanUrl.split('?')[0];
             return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&q=80&output=webp`;
@@ -225,15 +209,13 @@
 
         function resetAndHome() {
             document.title = "Daily Science | 科普小站";
-            document.getElementById('search-input').value = '';
-            
+            document.body.style.overflow = 'auto'; // 恢復主網頁捲動
             const root = document.getElementById('app-root');
             root.classList.remove('full-width-mode', 'article-mode');
             const nav = document.getElementById('main-nav');
             if(nav) nav.style.transform = 'translateY(0)';
             const footer = document.getElementById('main-footer');
             if(footer) footer.style.display = 'block';
-            
             isSearching = false;
             selectedTag = null;
             renderHome();
@@ -279,14 +261,16 @@
             const isFullHtml = art.content.toLowerCase().includes('<html') || art.content.toLowerCase().includes('<!doctype');
 
             if (isFullHtml) {
+                // === 劇院模式：修復版 ===
                 root.classList.add('full-width-mode');
+                document.body.style.overflow = 'hidden'; // 鎖定主頁捲動
                 const nav = document.getElementById('main-nav');
                 if(nav) nav.style.transform = 'translateY(-100%)';
 
                 root.innerHTML = `
                     <div class="fixed top-4 right-4 z-[9999] flex gap-2 group">
-                         <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/10 backdrop-blur text-slate-800 hover:bg-white hover:text-indigo-600 shadow-lg transition-all border border-white/20" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
-                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-lg hover:scale-110 transition-all border border-white/20"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/20 backdrop-blur-md text-slate-800 hover:bg-white transition-all shadow-xl" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
+                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-xl hover:scale-110 transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
                     <iframe id="content-frame" class="isolated-frame fade-in" src="about:blank"></iframe>
                 `;
@@ -297,16 +281,11 @@
                 doc.write(art.content);
                 doc.close();
                 
-                frame.onload = function() {
-                    // 嘗試自動調整高度，如果被擴充功能阻擋則忽略
-                    try {
-                        const height = frame.contentWindow.document.body.scrollHeight;
-                        if(height > 0) frame.style.height = Math.max(height, window.innerHeight) + 'px';
-                    } catch(e) {}
-                };
+                // [移除原本的高度計算邏輯]，讓 Iframe 保持 100vh
 
             } else {
                 root.classList.remove('full-width-mode');
+                document.body.style.overflow = 'auto';
                 const nav = document.getElementById('main-nav');
                 if(nav) nav.style.transform = 'translateY(0)';
 

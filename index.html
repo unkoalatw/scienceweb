@@ -30,14 +30,16 @@
 
         #app-root { min-height: 80vh; padding-top: 1rem; transition: opacity 0.3s ease; }
 
-        /* [關鍵] 全螢幕模式：強迫佔滿視窗並不產生額外間距 */
-        #app-root.full-width-mode {
+        /* [關鍵優化] 劇院模式：配合導航欄計算精確高度 */
+        #app-root.theater-mode {
             max-width: 100% !important;
             padding: 0 !important;
             margin: 0 !important;
             width: 100vw !important;
-            height: 100vh !important;
+            /* 100vh 減去導航欄與標籤列的大約高度 (約 115px)，確保不產生外層捲軸 */
+            height: calc(100vh - 115px) !important;
             overflow: hidden;
+            background: #fff;
         }
 
         .skeleton-card { background: #f1f5f9; border-radius: 2rem; height: 360px; position: relative; overflow: hidden; }
@@ -54,7 +56,6 @@
         .fade-in { animation: fadeIn 0.6s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .article-content img { border-radius: 2.5rem !important; margin: 3rem auto !important; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1) !important; }
         .prose { max-width: none !important; color: #334155 !important; }
         .prose h1 { font-weight: 900 !important; font-size: 2.75rem !important; line-height: 1.15 !important; color: #0f172a !important; margin-bottom: 0.5em !important; }
         
@@ -72,10 +73,10 @@
         }
         #back-to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
 
-        /* [關鍵] Iframe 隔離模式：高度固定為視窗高度，內部捲動 */
+        /* Iframe 隔離模式：充滿容器 */
         .isolated-frame {
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             border: none;
             display: block;
             background: #fff;
@@ -88,7 +89,7 @@
 <body class="bg-slate-50 text-slate-900 selection:bg-indigo-100">
     <div id="progress-bar"></div>
 
-    <nav id="main-nav" class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200 transition-transform duration-300">
+    <nav id="main-nav" class="bg-white/90 backdrop-blur-xl sticky top-0 z-[1000] border-b border-slate-200">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
             <div class="flex items-center space-x-3 cursor-pointer group" onclick="resetAndHome()">
                 <div class="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-md group-hover:rotate-6 transition-transform">
@@ -134,7 +135,7 @@
         let searchTimer = null;
 
         (function init() {
-            const cachedData = localStorage.getItem('ds_data_v31');
+            const cachedData = localStorage.getItem('ds_data_v33');
             if (cachedData) {
                 articles = JSON.parse(cachedData);
                 renderHome();
@@ -151,7 +152,7 @@
                 const json = await res.json();
                 if (json.status === 'success') {
                     articles = json.data;
-                    localStorage.setItem('ds_data_v31', JSON.stringify(articles));
+                    localStorage.setItem('ds_data_v33', JSON.stringify(articles));
                     if (!isSearching && !selectedTag && !document.querySelector('.article-mode')) {
                         renderHome();
                         renderTagCloud();
@@ -209,11 +210,9 @@
 
         function resetAndHome() {
             document.title = "Daily Science | 科普小站";
-            document.body.style.overflow = 'auto'; // 恢復主網頁捲動
+            document.body.style.overflow = 'auto'; 
             const root = document.getElementById('app-root');
-            root.classList.remove('full-width-mode', 'article-mode');
-            const nav = document.getElementById('main-nav');
-            if(nav) nav.style.transform = 'translateY(0)';
+            root.classList.remove('theater-mode', 'article-mode');
             const footer = document.getElementById('main-footer');
             if(footer) footer.style.display = 'block';
             isSearching = false;
@@ -261,16 +260,14 @@
             const isFullHtml = art.content.toLowerCase().includes('<html') || art.content.toLowerCase().includes('<!doctype');
 
             if (isFullHtml) {
-                // === 劇院模式：修復版 ===
-                root.classList.add('full-width-mode');
-                document.body.style.overflow = 'hidden'; // 鎖定主頁捲動
-                const nav = document.getElementById('main-nav');
-                if(nav) nav.style.transform = 'translateY(-100%)';
+                // === 劇院模式：保留導航欄優化版 ===
+                root.classList.add('theater-mode');
+                document.body.style.overflow = 'hidden'; // 鎖定背景
 
                 root.innerHTML = `
-                    <div class="fixed top-4 right-4 z-[9999] flex gap-2 group">
-                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/20 backdrop-blur-md text-slate-800 hover:bg-white transition-all shadow-xl" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
-                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-xl hover:scale-110 transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    <div class="fixed top-[125px] right-6 z-[9999] flex gap-2 group">
+                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-white/20 backdrop-blur-md text-slate-800 hover:bg-white transition-all shadow-xl border border-white/20" title="分享"><i data-lucide="share-2" class="w-5 h-5"></i></button>
+                        <button onclick="resetAndHome()" class="p-3 rounded-full bg-slate-900 text-white shadow-xl hover:scale-110 transition-all border border-white/20"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
                     <iframe id="content-frame" class="isolated-frame fade-in" src="about:blank"></iframe>
                 `;
@@ -280,14 +277,11 @@
                 doc.open();
                 doc.write(art.content);
                 doc.close();
-                
-                // [移除原本的高度計算邏輯]，讓 Iframe 保持 100vh
 
             } else {
-                root.classList.remove('full-width-mode');
+                // 普通文章模式
+                root.classList.remove('theater-mode');
                 document.body.style.overflow = 'auto';
-                const nav = document.getElementById('main-nav');
-                if(nav) nav.style.transform = 'translateY(0)';
 
                 const textContent = String(art.content).replace(/<[^>]*>/g, '');
                 const readTime = Math.max(1, Math.round(textContent.length / 400));
@@ -299,7 +293,7 @@
                         <button onclick="resetAndHome()" class="text-slate-400 hover:text-indigo-600 flex items-center font-bold transition group">
                             <i data-lucide="arrow-left" class="w-5 h-5 mr-2 group-hover:-translate-x-2 transition-transform"></i> 返回首頁
                         </button>
-                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="分享">
+                        <button onclick="copyShare('${art.title}')" class="p-3 rounded-full bg-slate-50 text-slate-400 hover:text-indigo-600 transition-all" title="分享">
                             <i data-lucide="share-2" class="w-6 h-6"></i>
                         </button>
                     </div>
@@ -312,7 +306,6 @@
                         ${optimizedImg ? `<img src="${optimizedImg}" class="w-full shadow-2xl mb-12" loading="eager">` : ''}
                         <div class="article-content text-slate-700 font-medium">${art.content}</div>
                     </article>
-                    <div class="mt-24 pt-12 border-t border-slate-100 text-center text-slate-300 font-black tracking-widest text-xs uppercase">End of Content</div>
                 </div>`;
                 
                 setTimeout(() => { executeScripts(root); }, 300); 
